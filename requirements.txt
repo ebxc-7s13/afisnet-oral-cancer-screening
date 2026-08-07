@@ -1,0 +1,57 @@
+# =============================================================================
+# Requirements for:
+#   "Quality Controlled Synthetic Augmentation for AI-Enabled Label-free
+#    Digital Cytology of Oral Cancer Screening"
+#
+# Dependencies were determined by inspecting the five pipeline scripts.
+# Only versions the code genuinely depends on are constrained.
+# =============================================================================
+
+# ---- Core (required) --------------------------------------------------------
+# torch >= 2.3 is required for the torch.amp.autocast / torch.amp.GradScaler
+# device-string API used in classification.py.
+torch>=2.3
+torchvision>=0.18
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+seaborn
+Pillow
+tqdm
+
+# Advanced classifier backbones, including CAFNet_Hybrid (AFiS-Net).
+# Without timm, classification.py degrades gracefully to the six torchvision
+# baselines, but reproducing the paper's results requires it.
+timm>=1.0
+
+# DINOv2 and CLIP feature extractors for gan_quality_selection.py.
+transformers
+
+# KID/FID computation for GAN checkpoint selection (gan_training.py).
+torchmetrics
+
+# LPIPS perceptual distance used in the quality-selection scoring
+# (gan_quality_selection.py redistributes its weight if unavailable, but the
+# reported experiments included it).
+lpips
+
+# ---- Optional (uncomment as needed) ----------------------------------------
+# Faster nearest-neighbour search in gan_quality_selection.py
+# (falls back to scikit-learn / pure torch when absent):
+# faiss-cpu
+#
+# UMAP projections in gan_quality_selection.py and classification.py
+# (t-SNE / PCA are produced regardless):
+# umap-learn
+#
+# No-reference image-quality metrics (MUSIQ / MANIQA / BRISQUE / NIQE);
+# disabled by default in gan_quality_selection.py:
+# pyiqa
+#
+# TensorBoard logging during GAN training:
+# tensorboard
+#
+# Live GPU-utilisation display during GAN training:
+# pynvml
