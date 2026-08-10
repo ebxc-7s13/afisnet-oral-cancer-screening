@@ -16,7 +16,7 @@ WHAT THIS SCRIPT DOES
 * Registers 22 ImageNet-pretrained backbones: 6 torchvision baselines plus
   16 timm-based encoders (CNN, transformer, and conv-attention hybrids),
   including the dual-branch convolution-transformer architecture referred to
-  as AFiS-Net in the manuscript (registry name: ``CAFNet_Hybrid``).
+  as AFiS-Net in the manuscript (registry name: ``AFiSNet``).
 * Fine-tunes every selected model under two experimental conditions:
   ``Raw`` (real images only) and ``Raw_SelectedSynthetic`` (real images plus
   the quality-selected synthetic images produced by gan_quality_selection.py,
@@ -51,7 +51,7 @@ USAGE
 -----
     python classification.py                       # 6 torchvision baselines
     python classification.py --models all          # all 22 registered models
-    python classification.py --models CAFNet_Hybrid,NextViT_Small
+    python classification.py --models AFiSNet,NextViT_Small
     python classification.py --list-models
 """
 
@@ -313,7 +313,7 @@ class CrossAttentionFusion(nn.Module):
 
 
 class FlagshipHybrid(nn.Module):
-    """CAFNet_Hybrid: ConvNeXt V2 (local texture / morphology) + Swin V2 (global
+    """AFiSNet: ConvNeXt V2 (local texture / morphology) + Swin V2 (global
     context) fused by cross-attention, pooled with GeM, into a fixed embedding.
 
     Rationale: ConvNeXt V2's FCMAE self-supervised pretraining yields strong,
@@ -386,7 +386,7 @@ _MULTISCALE: Dict[str, dict] = {
     "MobileViT_XS":        dict(timm="mobilevit_xs",            img=256),
 }
 _FLAGSHIP: Dict[str, dict] = {
-    "CAFNet_Hybrid": dict(cnn="convnextv2_nano", vit="swinv2_cr_tiny_ns_224", img=224),
+    "AFiSNet": dict(cnn="convnextv2_nano", vit="swinv2_cr_tiny_ns_224", img=224),
 }
 
 # Standard encoder output dimension (native_feature_dim) for every advanced
@@ -416,7 +416,7 @@ def register_advanced_models(model_specs: dict) -> List[str]:
     affected. Existing entries are never overwritten. Returns the list of names
     that were newly registered. These are NOT added to DEFAULT_MODELS, so the
     default training run is byte-for-byte unchanged; select them explicitly via
-    Config.models, e.g. models=("CAFNet_Hybrid", "ConvNeXtV2_Nano").
+    Config.models, e.g. models=("AFiSNet", "ConvNeXtV2_Nano").
     """
     if not _HAS_TIMM:
         return []
@@ -821,7 +821,11 @@ def build_transforms(img_size, cfg=None):
         T.RandomVerticalFlip(0.5),
         T.RandomRotation(15),                     # increased from 10
         T.RandomAffine(degrees=0, translate=(0.05, 0.05), interpolation=InterpolationMode.BICUBIC),
-        T.ColorJitter(brightness=0.08, contrast=0.08),  # saturation removed (meaningless for fluorescence)
+        # NO photometric (colour/brightness/contrast) jitter. Absolute channel
+        # intensities carry the NAD(P)H / FAD balance that provides the
+        # diagnostic contrast between normal and cancer cells, so perturbing
+        # them would corrupt the label. This matches the identical exclusion
+        # applied to the GAN augmentation pipeline in gan_training.py.
     ])
     # Elastic deformation if available (torchvision >= 0.13)
     try:
@@ -1420,6 +1424,27 @@ def cam_target_layer(model, cam_kind):
     return None
 
 
+def cam_target_name(model, cam_kind):
+    """Qualified module path of the layer Grad-CAM++ actually hooks.
+
+    Resolved by identity lookup against ``cam_target_layer`` -- the same
+    function ``run_explainability`` uses -- so the provenance recorded in a
+    deployment checkpoint can never drift from the module that was really
+    used.  This matters for AFiSNet and the other advanced encoders, whose
+    CAM target is the finest fused FPN level (``backbone.fpn.smooth.0``),
+    not a torchvision-style ``features``/``layer4`` stage.
+
+    Returns None when the model exposes no spatial convolution to hook.
+    """
+    target = cam_target_layer(model, cam_kind)
+    if target is None:
+        return None
+    for name, module in model.named_modules():
+        if module is target:
+            return name
+    return type(target).__name__
+
+
 class GradCAMpp:
     def __init__(self, model, target):
         self.model = model; self.a = None; self.g = None
@@ -1919,8 +1944,8 @@ def run_one(model_name, exp_name, seed, split, syn_train, class_names, cfg, fold
                             "interpolation": "bicubic", "eval_augmentation": False},
         "decision": {"temperature": temperature, "cancer_threshold": cancer_threshold,
                      "thresholds": optimal_thresholds.tolist(), "selection_metric": "validation_binary_f1"},
-        "gradcam": {"method": "Grad-CAM++", "target_layer": "backbone." +
-                    ("layer4[-1]" if model._cam == "resnet" else "features[-1]"),
+        "gradcam": {"method": "Grad-CAM++",
+                    "target_layer": cam_target_name(model, getattr(model, "_cam", None)),
                     "cell_focused": True},
         "embedding_reference": {**reference, "ood_threshold": ood_threshold,
                                 "ood_validation_quantile": cfg.ood_validation_quantile,
