@@ -33,7 +33,7 @@ folds are used for every model so comparisons are paired.
 
 MODELS CARRIED FORWARD (manuscript names in parentheses)
 --------------------------------------------------------
-  CAFNet_Hybrid  (AFiS-Net)      -- proposed dual-branch ConvNeXtV2 + SwinV2
+  AFiSNet        (AFiS-Net)      -- proposed dual-branch ConvNeXtV2 + SwinV2
                                     encoder with cross-attention fusion.
   NextViT_Small  (Transformer)   -- best transformer from the 22-model
                                     benchmark; largest augmentation gain.
@@ -49,7 +49,7 @@ OUTPUT (same artifact layout as classification.py, one subfolder per model)
 
 USAGE
   python kfold_classification.py                       # 4 models, 5 folds, seed 42
-  python kfold_classification.py --folds 5 --models CAFNet_Hybrid,NextViT_Small
+  python kfold_classification.py --folds 5 --models AFiSNet,NextViT_Small
   python kfold_classification.py --no-synthetic        # Raw experiment only
 """
 
@@ -67,14 +67,14 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 # Reuse the entire classification framework unchanged (this registers every
-# model, including the advanced timm backbones and the CAFNet_Hybrid /
+# model, including the advanced timm backbones and the AFiSNet /
 # AFiS-Net encoder).
 import classification as C
 from sklearn.model_selection import StratifiedGroupKFold
 
 
 # The four models carried forward (see rationale in the header).
-DEFAULT_KFOLD_MODELS = ["CAFNet_Hybrid", "NextViT_Small", "CoAtNet0", "ResNet50"]
+DEFAULT_KFOLD_MODELS = ["AFiSNet", "NextViT_Small", "CoAtNet0", "ResNet50"]
 
 # Leakage-safe region identifier from the filename: roi_<id>_<YYYYMMDD>_<HHMMSS>.
 _SESSION_RE = re.compile(r"roi_(\d+)_(\d{8})_(\d{6})", re.IGNORECASE)
