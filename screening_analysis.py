@@ -14,7 +14,7 @@ progression hypothesis:  normal < smoke < cancer.
 
 SCIENTIFIC FRAMING (important)
 ------------------------------
-The encoder (e.g. CAFNet_Hybrid / AFiS-Net) is trained ONLY on normal and
+The encoder (e.g. AFiSNet / AFiS-Net) is trained ONLY on normal and
 cancer cells. The smoker ("suspected") group is an UNSEEN cohort that was
 excluded from generator training, classifier training, model selection, and
 threshold selection. This script does NOT claim that the binary model
@@ -43,7 +43,7 @@ epistemic uncertainty. A single checkpoint file also works.
 
 USAGE
   python screening_analysis.py \
-      --checkpoint results/kfold/CAFNet_Hybrid/Raw_SelectedSynthetic \
+      --checkpoint results/kfold/AFiSNet/Raw_SelectedSynthetic \
       --data-root  data/screening \
       --groups normal,smoke,cancer \
       --output results/screening
