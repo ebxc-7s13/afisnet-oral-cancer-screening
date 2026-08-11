@@ -70,11 +70,11 @@ The quality-control stage central to the paper's contribution. Every generated i
 
 ### 3. Classification — `classification.py`
 
-Fine-tunes 22 ImageNet-pretrained architectures (6 torchvision baselines + 16 timm encoders spanning CNNs, vision transformers, and conv–attention hybrids, including the proposed **AFiS-Net**, registered as `CAFNet_Hybrid`) under two conditions — `Raw` (real images only) and `Raw_SelectedSynthetic` (real + quality-selected synthetic images added to training only) — across three seeds. It reports accuracy, balanced accuracy, per-class sensitivity/specificity, macro F1, MCC, Cohen's kappa, ROC-AUC, Brier score, and calibration (ECE/MCE) with validation-only temperature scaling and Youden-J thresholding; produces Grad-CAM++ and cell-focused attribution maps, hard-example analyses, embedding banks with Mahalanobis OOD references (consumed later by the screening stage), paired significance tests for Raw vs Raw+Synthetic, McNemar tests, and an automatic benchmarking/ranking report.
+Fine-tunes 22 ImageNet-pretrained architectures (6 torchvision baselines + 16 timm encoders spanning CNNs, vision transformers, and conv–attention hybrids, including the proposed **AFiS-Net**, registered as `AFiSNet`) under two conditions — `Raw` (real images only) and `Raw_SelectedSynthetic` (real + quality-selected synthetic images added to training only) — across three seeds. It reports accuracy, balanced accuracy, per-class sensitivity/specificity, macro F1, MCC, Cohen's kappa, ROC-AUC, Brier score, and calibration (ECE/MCE) with validation-only temperature scaling and Youden-J thresholding; produces Grad-CAM++ and cell-focused attribution maps, hard-example analyses, embedding banks with Mahalanobis OOD references (consumed later by the screening stage), paired significance tests for Raw vs Raw+Synthetic, McNemar tests, and an automatic benchmarking/ranking report.
 
 ### 4. Leakage-Safe Region-Grouped Cross-Validation — `kfold_classification.py`
 
-This stage exists because multiple single-cell frames can originate from the **same physical imaging region**, acquired seconds apart. A conventional frame-level split can place near-identical frames in both training and test sets, producing optimistic estimates that are not valid generalisation performance. This script therefore pools all real images and applies **Leakage-Safe Region-Grouped K-Fold Cross-Validation**: `StratifiedGroupKFold` on a group key of (ROI id, acquisition date) parsed from the filenames, so that every frame of a region stays inside a single fold and no region is ever shared between the training, validation, and test partitions (asserted at runtime). Quality-selected synthetic images are added to the training folds only, and identical folds are used for every model so comparisons are paired. The four models carried forward are `CAFNet_Hybrid` (AFiS-Net), `NextViT_Small` (transformer), `CoAtNet0` (conv–attention hybrid), and `ResNet50` (CNN baseline). The paper's headline results are the cross-validated estimates from this stage.
+This stage exists because multiple single-cell frames can originate from the **same physical imaging region**, acquired seconds apart. A conventional frame-level split can place near-identical frames in both training and test sets, producing optimistic estimates that are not valid generalisation performance. This script therefore pools all real images and applies **Leakage-Safe Region-Grouped K-Fold Cross-Validation**: `StratifiedGroupKFold` on a group key of (ROI id, acquisition date) parsed from the filenames, so that every frame of a region stays inside a single fold and no region is ever shared between the training, validation, and test partitions (asserted at runtime). Quality-selected synthetic images are added to the training folds only, and identical folds are used for every model so comparisons are paired. The four models carried forward are `AFiSNet` (AFiS-Net), `NextViT_Small` (transformer), `CoAtNet0` (conv–attention hybrid), and `ResNet50` (CNN baseline). The paper's headline results are the cross-validated estimates from this stage.
 
 ### 5. Independent Screening Analysis — `screening_analysis.py`
 
@@ -89,7 +89,7 @@ python gan_training.py
 python gan_quality_selection.py
 python classification.py --models all
 python kfold_classification.py
-python screening_analysis.py --checkpoint results/kfold/CAFNet_Hybrid/Raw_SelectedSynthetic --data-root data/screening
+python screening_analysis.py --checkpoint results/kfold/AFiSNet/Raw_SelectedSynthetic --data-root data/screening
 ```
 
 Useful variants:
@@ -140,7 +140,7 @@ A CUDA-capable GPU is strongly recommended (experiments in the paper used a sing
 
 ## Notes on Naming
 
-The model registry key `CAFNet_Hybrid` in the code corresponds to the architecture named **AFiS-Net** in the manuscript (the registry key is preserved so that trained deployment checkpoints, which store the backbone name, remain loadable). Likewise, `NextViT_Small` and `CoAtNet0` are the "Transformer" and "Conv–attention" models of the paper's cross-validation table.
+The model registry key `AFiSNet` in the code is the architecture named **AFiS-Net** (Autofluorescence Intelligent Screening Network) in the manuscript; the hyphenated form is used in prose and the unhyphenated form is the code identifier. Likewise, `NextViT_Small` and `CoAtNet0` are the "Transformer" and "Conv–attention" models of the paper's cross-validation table.
 
 ## Citation
 
