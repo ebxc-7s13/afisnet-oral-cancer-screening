@@ -1,4 +1,4 @@
-# Quality-Controlled Synthetic Augmentation for AI-Enabled Label-Free Digital Cytology of Oral Cancer Screening
+# Synthetic Augmentation for Label-free Digital Cytology of Oral Cancer Screening
 
 Official code repository accompanying the research paper:
 
@@ -148,7 +148,7 @@ If you use this code, please cite:
 
 ```bibtex
 @article{vardhan_quality_controlled_synthetic,
-  title   = {Quality Controlled Synthetic Augmentation for AI-Enabled Label-free Digital Cytology of Oral Cancer Screening},
+  title   = {Synthetic Augmentation for Label-free Digital Cytology of Oral Cancer Screening},
   author  = {Siluveru Raja Viveka Vardhan and Sk Sher Md and Mousumi Pal and Ananya Barui},
   journal = {...},
   year    = {...},
