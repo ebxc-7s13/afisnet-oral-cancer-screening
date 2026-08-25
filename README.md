@@ -142,22 +142,6 @@ A CUDA-capable GPU is strongly recommended (experiments in the paper used a sing
 
 The model registry key `AFiSNet` in the code is the architecture named **AFiS-Net** (Autofluorescence Intelligent Screening Network) in the manuscript; the hyphenated form is used in prose and the unhyphenated form is the code identifier. Likewise, `NextViT_Small` and `CoAtNet0` are the "Transformer" and "Conv–attention" models of the paper's cross-validation table.
 
-## Citation
-
-If you use this code, please cite:
-
-```bibtex
-@article{vardhan_quality_controlled_synthetic,
-  title   = {Synthetic Augmentation for Label-free Digital Cytology of Oral Cancer Screening},
-  author  = {Siluveru Raja Viveka Vardhan and Sk Sher Md and Mousumi Pal and Ananya Barui},
-  journal = {...},
-  year    = {...},
-  doi     = {...}
-}
-```
-
-(Journal, year, and DOI will be added upon publication.)
-
 ## Acknowledgements
 
 This work was supported by the IIT Kharagpur AI4ICPS I-Hub Foundation under Grant No. DRC/IITKGP-AI4ICPS I HF/CHST/AB/019/23-24.
