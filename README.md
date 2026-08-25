@@ -1,8 +1,8 @@
-# Synthetic Augmentation for Label-free Digital Cytology of Oral Cancer Screening
+# Quality-Controlled Generative Augmentation for Robust Representation Learning in LimitedData Autofluorescence Cytology
 
 Official code repository accompanying the research paper:
 
-> **Quality Controlled Synthetic Augmentation for AI-Enabled Label-free Digital Cytology of Oral Cancer Screening**
+> **Quality-Controlled Generative Augmentation for Robust Representation Learning in LimitedData Autofluorescence Cytology**
 > Siluveru Raja Viveka Vardhan, Sk Sher Md, Mousumi Pal, Ananya Barui
 > Centre for Healthcare Science and Technology, Indian Institute of Engineering Science and Technology Shibpur; Guru Nanak Institute of Dental Sciences and Research
 
