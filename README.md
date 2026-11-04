@@ -1,151 +1,239 @@
-# Quality-Controlled Generative Augmentation for Robust Representation Learning in LimitedData Autofluorescence Cytology
+# Texture-Preserving Generative Augmentation for Robust Representation Learning in Limited-Data Autofluorescence Cytology
 
-Official code repository accompanying the research paper:
+Code for the paper:
 
-> **Quality-Controlled Generative Augmentation for Robust Representation Learning in LimitedData Autofluorescence Cytology**
+> **Texture-Preserving Generative Augmentation for Robust Representation Learning in Limited-Data Autofluorescence Cytology**
 > Siluveru Raja Viveka Vardhan, Sk Sher Md, Mousumi Pal, Ananya Barui
 > Centre for Healthcare Science and Technology, Indian Institute of Engineering Science and Technology Shibpur; Guru Nanak Institute of Dental Sciences and Research
+> Submitted to *Biomedical Signal Processing and Control*.
 
-Oral cancer is frequently diagnosed late, and diagnosis still relies on invasive biopsy. Label-free confocal autofluorescence imaging (AFI) of exfoliated oral epithelial cells detects the metabolic changes of malignant transformation non-invasively, but the limited size of clinical AFI datasets makes reliable deep-learning training difficult.
+Oral cancer is often diagnosed late, and diagnosis still relies on invasive biopsy. Label-free confocal autofluorescence imaging (AFI) of exfoliated oral epithelial cells picks up the metabolic changes of malignant transformation without labels or biopsy, but clinical AFI datasets are small.
 
-This repository implements the complete study workflow:
+This repository contains every script used in the study:
+- a class-conditional StyleGAN2-ADA with a **Neural Texture Preservation (NTP) loss** that keeps the sparse, high-frequency texture and fluorescence statistics of autofluorescent cells;
+- an automated **quality-control (QC)** pipeline for synthetic images;
+- the **AFiS-Net** classifier (Autofluorescence Intelligent Screening Network) and three reference architectures;
+- **region-grouped five-fold cross-validation**, repeated over three seeds;
+- the controlled experiments on synthetic-data quantity and curation;
+- quantitative attribution analysis;
+- **leakage-free screening** of an unseen cohort of tobacco smokers.
 
-**GAN synthesis → Quality-controlled selection → Synthetic augmentation → Classification → Leakage-safe validation → Independent screening**
+## Main results reported in the paper
 
-A class-conditional StyleGAN2-ADA generator, extended with a Neural Texture Preservation (NTP) loss that protects the sparse, high-frequency nuclear and perinuclear detail of AFI, synthesises realistic single-cell images. Crucially, **not every generated image is used for training**: every candidate passes through an automated quality-control stage that scores quality, diversity, and class consistency, and only the selected subset is added to the real training set. Classifiers — including the proposed dual-branch convolution–transformer **AFiS-Net** — are then benchmarked, re-validated under leakage-safe region-grouped cross-validation, and finally applied to an independent, entirely unseen cohort of tobacco smokers to test whether the learned malignancy-related feature space places them between the normal and cancer classes.
+| Result | Value |
+|---|---|
+| AFiS-Net, real images only (15 runs) | AUC 0.955 ± 0.031 |
+| AFiS-Net vs NextViT-S / CoAtNet-0 / ResNet-50 | +0.050 / +0.030 / +0.033 AUC (Holm-adjusted p ≤ 0.001) |
+| AFiS-Net-XA, real only → + all 3,000 generated images | AUC 0.954 → 0.973 (Holm-adjusted p = 0.001) |
+| QC-selected (215) vs random (215) synthetic images | no difference; ranking by QC score did not help |
+| AFiS-Net + QC-clean set (2,764 images, hygiene filter, single seed) | AUC 0.969, macro F1 0.934 |
+| Unseen smokers, mean cancer probability (normal / smokers / cancer) | 0.05 / 0.41 / 0.95; the fold models disagree on most smoker cells |
 
-## Overview
-
-- **Task**: binary classification (normal vs cancer) of 256×256 single-cell pseudo-RGB confocal autofluorescence images, followed by feature-space screening of an unseen intermediate-risk cohort.
-- **Data scarcity solution**: texture-preserving class-conditional GAN synthesis with automated, conservative quality control before augmentation.
-- **Evaluation discipline**: fixed region-level splits, three random seeds, temperature calibration, validation-only threshold selection, and region-grouped five-fold cross-validation so that frames from the same physical imaging region never cross partitions.
-- **Interpretability**: Grad-CAM++ and cell-focused attribution maps, embedding visualisations, and Mahalanobis out-of-distribution (novelty) scoring.
-
-## Pipeline
-
-```
-Real Autofluorescence Images
-        ↓
-Class-Conditional GAN (StyleGAN2-ADA + NTP loss)        gan_training.py
-        ↓
-Synthetic Images (1,000 per class)
-        ↓
-Quality-Controlled Synthetic Image Selection            gan_quality_selection.py
-        ↓
-Raw + Selected Synthetic Training Dataset
-        ↓
-Deep Learning Classification (22 architectures)         classification.py
-        ↓
-Leakage-Safe Region-Grouped Cross-Validation            kfold_classification.py
-        ↓
-Independent Screening Analysis (unseen cohort)          screening_analysis.py
-```
-
-## Repository Structure
+## Repository structure
 
 ```
 .
-├── gan_training.py            # Stage 1 — GAN training & image generation
-├── gan_quality_selection.py   # Stage 2 — synthetic-image quality control
-├── classification.py          # Stage 3 — classifier benchmarking (Raw vs Raw+Synthetic)
-├── kfold_classification.py    # Stage 4 — leakage-safe region-grouped k-fold CV
-├── screening_analysis.py      # Stage 5 — independent screening cohort analysis
+├── gan_training.py            # Stage 1: class-conditional StyleGAN2-ADA + NTP loss; image generation
+├── gan_quality_selection.py   # Stage 2: QC scoring and ranked selection of synthetic images
+├── classification.py          # Stage 3: classifier benchmark (22 architectures), training, calibration, embeddings
+├── kfold_classification.py    # Stage 4: region-grouped five-fold cross-validation
+├── screening_analysis.py      # Stage 5: stand-alone screening of the held-out cohort
+├── experiments/
+│   ├── afis_core.py           # experiments of the paper: job queue, folds, synthetic sources, AFiS-Net variants,
+│   │                          #   pre-declared model-selection rule
+│   └── afis_analysis.py       # QC hygiene filter, matched-n generator metrics, texture analysis, attribution
+│                              #   metrics, leakage-free screening (novelty, JPEG control), paired statistics
+├── paper_scripts/
+│   ├── make_tables.py         # builds every results table of the paper from the result files
+│   ├── integrity_check.py     # recomputes the numbers quoted in the paper and checks them against the manuscript
+│   ├── fig_final.py           # Figs 6 and 7 (ROC/confusion; quantity vs curation)
+│   ├── make_figures.py        # remaining result figures
+│   ├── final_model_analysis.py
+│   ├── fix_texture_fig.py     # re-letters the panels of the texture figure
+│   └── afisnet_architecture.tex   # Fig. 3, architecture diagram (TikZ)
 ├── requirements.txt
-├── .gitignore
 ├── LICENSE
 └── README.md
 ```
 
-The stages are deliberately kept as five standalone, executable scripts (no package structure). `kfold_classification.py` and `screening_analysis.py` import `classification.py` to reuse its model registry, preprocessing, training loop, and checkpoint format unchanged.
+The five stage scripts are standalone. `kfold_classification.py`, `screening_analysis.py` and the modules in `experiments/` import `classification.py` and reuse its model registry, preprocessing, training loop and checkpoint format unchanged.
 
-## Workflow
+## Pipeline and settings
 
-### 1. GAN Training and Image Generation — `gan_training.py`
+### 1. Synthetic image generation: `gan_training.py`
 
-Trains the class-conditional StyleGAN2-ADA generator (projection discriminator, ADA, R1 and LeCam regularisation, style mixing, path-length regularisation, generator EMA) with the proposed **Neural Texture Preservation loss**: five unpaired, distribution-level statistics-matching terms (VGG-16 Gram matrices, VGG-16 feature mean/std, Haar-wavelet band energies, a one-sided total-variation hinge, and soft-masked fluorescence-photometry statistics), each matched to class-wise EMA targets computed from real images with a scale-invariant relative MSE. The NTP coefficient is warm-started for 20 epochs and linearly ramped over the next 30. Generator checkpoints are selected by Kernel Inception Distance on an internal, deterministically held-out validation subset (never on the generator's own training images). After training, the EMA generator writes 1,000 images per class into class-named folders. `--no-ntp` reproduces the StyleGAN2-ADA ablation baseline reported in the paper.
+- **Model.** Class-conditional StyleGAN2-ADA with:
+  - a projection discriminator;
+  - adaptive discriminator augmentation (target 0.6);
+  - lazy R1 regularisation (γ = 0.8, every 16 iterations);
+  - LeCam regularisation (λ = 0.05);
+  - style mixing (0.9) and path-length regularisation (weight 2);
+  - a generator EMA with a 20-kimg half-life.
+- **Training.** Adam (β₁ = 0, β₂ = 0.99, learning rate 2 × 10⁻³), batch 16, 3,000 kimg, at 224 × 224 resolution. Training images are random 224 crops of the 256 × 256 single-cell images, with flips and 90° rotations.
+- **NTP loss.** Five distribution-level statistics, each matched to class-wise EMA targets (decay 0.99) with a scale-invariant relative MSE (ε = 10⁻⁶):
 
-### 2. Synthetic Image Quality Selection — `gan_quality_selection.py`
+  | Statistic | Weight |
+  |---|---|
+  | VGG-16 Gram matrices (relu1_2, relu2_2, relu3_3) | 1.0 |
+  | VGG-16 feature mean/std (relu3_3, relu4_3) | 1.0 |
+  | Haar wavelet band energy | 0.5 |
+  | One-sided total-variation hinge | 0.1 |
+  | Soft-masked fluorescence photometry (κ = 0.5, τ = 0.08) | 0.5 |
 
-The quality-control stage central to the paper's contribution. Every generated image is scored with DINOv2 and CLIP similarity to its nearest real neighbours, LPIPS perceptual distance, nearest-neighbour distance, local density, a DINOv2 **class-margin** criterion (class consistency), and an outlier penalty (Isolation Forest). Safeguards reject exact duplicates, near-copies of real training images (the memorisation safeguard), cross-class-ambiguous images, and near-duplicate synthetic images (greedy diversity filter). At most 40 % of candidates — capped at 0.5 × the number of real training images per class — survive. **Only this selected subset proceeds to classifier augmentation.** The selected set is additionally evaluated against the real distribution with FID, KID, and precision/recall/density/coverage. All thresholds are defined at the top of the script; the process is fully automated with no manual inspection.
+  The overall NTP weight is 0 for 20 epochs, then ramps linearly to 1 over the next 30.
+- **Checkpoint selection.** A fixed 15% of each class of the training folder is held out from GAN training. Checkpoints are selected by KID on that hold-out, so the generator never sees validation or test images.
+- **Baseline.** `--no-ntp` gives the StyleGAN2-ADA baseline used in the paper.
+- **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used 1,500 images per class (`--per-class 1500`); the default is 1,000.
 
-### 3. Classification — `classification.py`
+### 2. Quality control: `gan_quality_selection.py` and `experiments/afis_analysis.py`
 
-Fine-tunes 22 ImageNet-pretrained architectures (6 torchvision baselines + 16 timm encoders spanning CNNs, vision transformers, and conv–attention hybrids, including the proposed **AFiS-Net**, registered as `AFiSNet`) under two conditions — `Raw` (real images only) and `Raw_SelectedSynthetic` (real + quality-selected synthetic images added to training only) — across three seeds. It reports accuracy, balanced accuracy, per-class sensitivity/specificity, macro F1, MCC, Cohen's kappa, ROC-AUC, Brier score, and calibration (ECE/MCE) with validation-only temperature scaling and Youden-J thresholding; produces Grad-CAM++ and cell-focused attribution maps, hard-example analyses, embedding banks with Mahalanobis OOD references (consumed later by the screening stage), paired significance tests for Raw vs Raw+Synthetic, McNemar tests, and an automatic benchmarking/ranking report.
+**Ranked selection (QC-selected)** is done by `gan_quality_selection.py`. Every generated image is scored against the real training images of its class. The weights are:
 
-### 4. Leakage-Safe Region-Grouped Cross-Validation — `kfold_classification.py`
+| Term | Weight |
+|---|---|
+| DINOv2 class margin | 0.25 |
+| DINOv2 top-10 similarity | 0.20 |
+| CLIP top-10 similarity | 0.12 |
+| LPIPS to nearest real image | 0.08 |
+| Nearest-neighbour distance | 0.07 |
+| Local real-image density | 0.03 |
 
-This stage exists because multiple single-cell frames can originate from the **same physical imaging region**, acquired seconds apart. A conventional frame-level split can place near-identical frames in both training and test sets, producing optimistic estimates that are not valid generalisation performance. This script therefore pools all real images and applies **Leakage-Safe Region-Grouped K-Fold Cross-Validation**: `StratifiedGroupKFold` on a group key of (ROI id, acquisition date) parsed from the filenames, so that every frame of a region stays inside a single fold and no region is ever shared between the training, validation, and test partitions (asserted at runtime). Quality-selected synthetic images are added to the training folds only, and identical folds are used for every model so comparisons are paired. The four models carried forward are `AFiSNet` (AFiS-Net), `NextViT_Small` (transformer), `CoAtNet0` (conv–attention hybrid), and `ResNet50` (CNN baseline). The paper's headline results are the cross-validated estimates from this stage.
+Weights of disabled terms are redistributed proportionally, and the score is multiplied by 1 − 0.25 × the isolation-forest outlier score. The script rejects:
+- class-ambiguous images (margin ≤ 0);
+- near-copies of real images (DINOv2 cosine ≥ 0.995);
+- near-duplicates of already kept images (cosine > 0.98).
 
-### 5. Independent Screening Analysis — `screening_analysis.py`
+It then keeps the top 40%, capped at half the number of real training images. In the paper this gave 215 images.
 
-Evaluates the trained binary encoder on the independent screening cohort (non-smoker / smoker / cancer). The smoker ("suspected") group was **unseen during every stage of training, model selection, and threshold selection**; this script does *not* claim the binary classifier diagnoses it. Instead, it investigates whether the group's samples occupy an intermediate position within the learned malignancy-related feature space. Using a k-fold ensemble of deployment checkpoints, it reports per image the calibrated classifier cancer probability, an independent prototype/Mahalanobis-based probability, confidence, predictive entropy, epistemic uncertainty (spread across ensemble members), and a Mahalanobis novelty (OOD) score; aggregates per group and per ROI; and computes the progression statistics (Spearman monotonic trend, Kruskal–Wallis, one-sided pairwise Mann–Whitney U, and a normal-vs-cancer AUC internal validation), together with figures and a text report.
+**Hygiene filter (QC-clean)** is `afis_analysis.qc_clean_ntp`. It applies no ranking. An image is removed only if it fails a check that real cells of its class almost never fail:
+- a technical defect;
+- a near-copy of a real image (≥ 0.995);
+- an unrealistic image (below the real 1st percentile of nearest-real similarity);
+- extreme class ambiguity (below the real 5th percentile of class margin);
+- a duplicate (≥ 0.98).
 
-## How to Run
+Reference distributions are computed leave-one-region-out, and no criterion removes more than the extreme 2.5–5% tail of the pool. In the paper this kept 2,764 of 3,000 images.
 
-Run the stages in order (defaults reproduce the configuration used in the paper):
+The paper's central result is that adding *more* synthetic images helps, while ranking them by QC score does not. The ranked selection is therefore an experimental arm, not a required step.
+
+### 3. Classification: `classification.py`
+
+The script fine-tunes ImageNet-pretrained models:
+- 6 torchvision and 16 timm models;
+- including AFiS-Net, registered as `AFiSNet`, which is the cross-attention + GeM design called **AFiS-Net-XA** in the paper.
+
+Preprocessing:
+- deterministic foreground crop (Otsu threshold on the maximum-intensity projection, 8% padding, skipped below 1% or above 92% foreground);
+- resize to 224 × 224;
+- training augmentation: flips, ±15° rotation, 5% translation, elastic deformation (α = 15, σ = 3) and Gaussian noise (σ = 0.005);
+- no photometric augmentation.
+
+Training:
+- AdamW, learning rate 10⁻⁴ for the head and 10⁻⁵ for the backbones;
+- backbones frozen for 2 warm-up epochs, then cosine decay;
+- batch 32, at most 50 epochs, early stopping with patience 10;
+- gradient clipping at 1.0;
+- loss: class-weighted cross-entropy with label smoothing 0.05, plus a supervised contrastive term (weight 0.1, temperature 0.1) on the L2-normalised 256-D embedding;
+- explicit L1 (10⁻⁸) and L2 (10⁻⁶) penalties, with the decoupled weight decay set to 0.
+
+Model selection and calibration:
+- the checkpoint with the best validation macro F1 is kept;
+- probabilities are calibrated by temperature scaling on the validation set;
+- the decision threshold is set there by Youden's J.
+
+The script also writes per-run metrics, Grad-CAM++ maps, embedding banks and diagonal-Mahalanobis references.
+
+### 4. Region-grouped cross-validation: `kfold_classification.py`
+
+Several single-cell images can come from the same imaging region, so the 608 real images are split with `StratifiedGroupKFold` on (ROI id, acquisition date) parsed from the filename. Fold *i* is the test set, fold *i*+1 the validation set, and the remaining three folds the training set. The split is repeated with seeds 42, 100 and 123.
+
+Synthetic images are added only to the training folds, and every model sees identical folds, so all comparisons are paired.
+
+### 5. Experiments in the paper: `experiments/`
+
+`afis_core.py` defines every cross-validation job of the paper:
+- reference architectures (NextViT-S, CoAtNet-0, ResNet-50);
+- synthetic sources: QC-selected, random 215, all 3,000, 500/1,000/2,000 random, top-ranked 2,124, QC-clean 2,764, and random sets matched to these;
+- the reduced-real-data series (25/50/75%);
+- the fold-aware leakage control;
+- the AFiS-Net ablation (`AblationHybrid`: CNN only, transformer only, concatenation, average pooling, both, no contrastive loss);
+- the pre-declared rule for the final configuration, `choose_final_model`: candidates within 0.005 of the best mean AUC are equivalent, and the simplest wins.
+
+The final AFiS-Net is **`AFiSNet_ConcatAvg`**: average-pooled FPN levels of ConvNeXt V2-Nano (768-D), concatenated with the average-pooled, layer-normalised deepest Swin V2-Tiny stage (384-D). Jobs are queued and resumable across GPU sessions. Paths default to a Kaggle layout and can be changed with the `AFIS_WORK` environment variable and the `input_root`/`overrides` arguments.
+
+`afis_analysis.py` contains the analyses of the paper:
+- the QC hygiene filter;
+- generator metrics at matched sample size (FID, KID, precision/recall/density/coverage);
+- Fourier and LBP texture analysis;
+- occlusion and Grad-CAM++ evaluation (share of attribution inside the cell, pointing game, deletion/insertion);
+- leakage-free screening: comparison images are scored out-of-fold and unseen images by the mean of the five fold models, with between-model s.d., diagonal-Mahalanobis novelty and a JPEG file-format control;
+- paired statistics: Wilcoxon with Holm adjustment, DeLong, Jonckheere–Terpstra, Kruskal–Wallis and Mann–Whitney.
+
+### 6. Stand-alone screening: `screening_analysis.py`
+
+This script applies a trained k-fold ensemble to a held-out cohort. It reports per image:
+- calibrated probability and prototype probability;
+- entropy and epistemic uncertainty;
+- Mahalanobis novelty.
+
+It also gives group and ROI summaries. The screening numbers in the paper come from `afis_analysis.screening_v8`.
+
+## How to run
 
 ```bash
-python gan_training.py
-python gan_quality_selection.py
-python classification.py --models all
-python kfold_classification.py
+pip install -r requirements.txt
+
+python gan_training.py --data data/train                 # train the generator (add --no-ntp for the baseline)
+python gan_training.py --mode generate --weights checkpoints/gan/generator_best.pth --per-class 1500
+python gan_quality_selection.py                          # QC-selected set
+python classification.py --models all                    # benchmark on the fixed split
+python kfold_classification.py                           # region-grouped cross-validation
 python screening_analysis.py --checkpoint results/kfold/AFiSNet/Raw_SelectedSynthetic --data-root data/screening
 ```
 
-Useful variants:
+To build the paper's tables and check the manuscript numbers from the experiment results:
 
 ```bash
-python gan_training.py --no-ntp                        # StyleGAN2-ADA ablation baseline
-python gan_training.py --mode generate --weights checkpoints/gan/generator_best.pth
-python classification.py --list-models                 # show all 22 registered models
-python kfold_classification.py --no-synthetic          # Raw-only cross-validation
+python paper_scripts/make_tables.py RES7 RES9 record_based_tests.csv out/
+python paper_scripts/integrity_check.py MANUSCRIPT_DIR RES7 RES9 record_based_tests.csv
 ```
 
-Every script accepts `--help`. Dataset locations can be overridden with CLI flags (`--data`, `--real-folder`/`--gan-folder`/`--output-folder`, `--train-root`/`--val-root`/`--test-root`/`--synthetic-root`, `--data-root`) or the `AFIS_*` environment variables documented in `classification.py`.
+Every script accepts `--help`. Dataset locations can be set with CLI flags or the `AFIS_*` environment variables documented in `classification.py`.
 
-## Dataset Structure
+## Data
 
-The scripts expect class-named folders of single-cell images (PNG/JPG/TIFF/BMP):
+The scripts expect class-named folders of single-cell images:
 
 ```
 data/
-├── train/                 # real training images (development set)
-│   ├── normal/
-│   └── cancer/
-├── val/                   # real validation images
-│   ├── normal/
-│   └── cancer/
-├── test/                  # real held-out test images
-│   ├── normal/
-│   └── cancer/
-└── screening/             # independent screening cohort (held out entirely)
-    ├── normal/
-    ├── smoke/             # aliases such as "smoker" are recognised
-    └── cancer/
+├── train/{normal,cancer}/
+├── val/{normal,cancer}/
+├── test/{normal,cancer}/
+└── screening/{normal,smoke,cancer}/      # held out from all training
 ```
 
-Real filenames follow the pattern `roi_<id>_<YYYYMMDD>_<HHMMSS>*.png`; the ROI id and acquisition date are parsed from the filename to build the leakage-safe region groups used in Stages 4–5. Generated and selected synthetic images are written to `outputs/gan/final_generated/` and `outputs/selected_synthetic/` respectively, matching the defaults of the downstream stages.
+Filenames follow `roi_<id>_<YYYYMMDD>_<HHMMSS>*.png`. The ROI id and acquisition date define the region groups.
 
-**This repository provides the implementation only.** The patient-derived confocal autofluorescence images cannot be made publicly available because of institutional patient-privacy and ethical requirements; data are available from the corresponding author upon reasonable request.
+**Only the code is distributed here.** Patient privacy and institutional ethics requirements prevent publishing the confocal autofluorescence images; they are available from the corresponding author on reasonable request. The per-run metrics, paired tests, per-image QC decisions, attribution metrics and screening results are provided as supplementary material with the paper.
 
-## Installation
+## Hardware
 
-```bash
-git clone <repository-url>
-cd <repository-name>
-pip install -r requirements.txt
-```
+In the paper, the generator was trained on one NVIDIA RTX 6000. The classifier experiments ran on NVIDIA T4 GPUs with mixed precision.
 
-A CUDA-capable GPU is strongly recommended (experiments in the paper used a single NVIDIA RTX 4000 Ada, 20 GB). Optional accelerations and extras (`faiss-cpu`, `umap-learn`, `pyiqa`, `tensorboard`, `pynvml`) are listed, commented out, in `requirements.txt`; every script degrades gracefully without them.
+## Naming
 
-## Notes on Naming
+| Code identifier | Name in the paper |
+|---|---|
+| `AFiSNet_ConcatAvg` | AFiS-Net (final configuration) |
+| `AFiSNet` | AFiS-Net-XA (cross-attention + GeM) |
+| `NextViT_Small` | NextViT-S |
+| `CoAtNet0` | CoAtNet-0 |
+| `ResNet50` | ResNet-50 |
 
-The model registry key `AFiSNet` in the code is the architecture named **AFiS-Net** (Autofluorescence Intelligent Screening Network) in the manuscript; the hyphenated form is used in prose and the unhyphenated form is the code identifier. Likewise, `NextViT_Small` and `CoAtNet0` are the "Transformer" and "Conv–attention" models of the paper's cross-validation table.
+## Funding
 
-## Acknowledgements
-
-This work was supported by the IIT Kharagpur AI4ICPS I-Hub Foundation under Grant No. DRC/IITKGP-AI4ICPS I HF/CHST/AB/019/23-24.
+This work was supported by the IIT Kharagpur AI4ICPS I-Hub Foundation [grant number DRC/IITKGP-AI4ICPS I HF/CHST/AB/019/23-24].
 
 ## License
 
-This repository is released under the [MIT License](LICENSE).
+MIT License, see [LICENSE](LICENSE).

@@ -1,7 +1,7 @@
 # =============================================================================
 # .gitignore for the repository accompanying:
-#   "Quality Controlled Synthetic Augmentation for AI-Enabled Label-free
-#    Digital Cytology of Oral Cancer Screening"
+#   "Texture-Preserving Generative Augmentation for Robust Representation
+#    Learning in Limited-Data Autofluorescence Cytology"
 #
 # Structure: GitHub's standard Python template (trimmed to what this project
 # can actually produce), followed by project-specific rules. Clinical images,
