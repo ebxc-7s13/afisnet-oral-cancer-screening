@@ -7,16 +7,18 @@ Code for the paper:
 > Centre for Healthcare Science and Technology, Indian Institute of Engineering Science and Technology Shibpur; Guru Nanak Institute of Dental Sciences and Research
 > Submitted to *Biomedical Signal Processing and Control*.
 
-Oral cancer is often diagnosed late, and diagnosis still relies on invasive biopsy. Label-free confocal autofluorescence imaging (AFI) of exfoliated oral epithelial cells picks up the metabolic changes of malignant transformation without labels or biopsy, but clinical AFI datasets are small.
+Oral cancer is often diagnosed late, and diagnosis still relies on invasive biopsy. Label-free confocal autofluorescence imaging (AFI) of exfoliated oral epithelial cells is a label-free way to study the autofluorescence of these cells, but clinical AFI datasets are small. The workflow here is investigational and has not been validated for participant-level diagnosis.
 
 This repository contains every script used in the study:
-- a class-conditional StyleGAN2-ADA with a **Neural Texture Preservation (NTP) loss** that keeps the sparse, high-frequency texture and fluorescence statistics of autofluorescent cells;
+- a class-conditional StyleGAN2-ADA with a **Neural Texture Preservation (NTP) loss** that matches class-level texture statistics and global grey-scale fluorescence statistics of autofluorescent cells;
 - an automated **quality-control (QC)** pipeline for synthetic images;
 - the **AFiS-Net** classifier (Autofluorescence Intelligent Screening Network) and three reference architectures;
 - **region-grouped five-fold cross-validation**, repeated over three seeds;
 - the controlled experiments on synthetic-data quantity and curation;
 - quantitative attribution analysis;
-- **screening of an unseen suspicious group** (tobacco smokers without a diagnosed lesion), scored by models that never saw it.
+- **screening of an unseen suspicious group** (an exposure-defined group of active cigarette smokers without a diagnosed oral lesion), scored by models that never saw it.
+
+The cancer class comprises histopathologically confirmed oral epithelial dysplasia or oral squamous cell carcinoma; the classifier output is the probability of this binary training class, not a validated probability of carcinoma.
 
 ## Main results reported in the paper
 
@@ -26,8 +28,8 @@ This repository contains every script used in the study:
 | AFiS-Net vs NextViT-S / CoAtNet-0 / ResNet-50 | +0.050 / +0.030 / +0.033 AUC (Holm-adjusted p ≤ 0.001) |
 | AFiS-Net-XA, real only → + all 3,000 generated images | AUC 0.954 → 0.973 (Holm-adjusted p = 0.001) |
 | QC-selected (215) vs random (215) synthetic images | no difference; ranking by QC score did not help |
-| AFiS-Net + QC-clean set (2,764 images, hygiene filter, single seed) | AUC 0.969, macro F1 0.934 |
-| Generator vs the 177 real images not used to fit it | KID 0.016 (normal) / 0.012 (cancer), similar to 0.013 / 0.011 against its training images |
+| AFiS-Net + QC-clean set (2,764 images, hygiene filter, single seed) | AUC 0.969, macro F1 0.934 (random set of equal size: AUC 0.970) |
+| Generator vs the 177 real images it never used (neither fitting nor checkpoint selection) | KID 0.016 (normal) / 0.012 (cancer), similar to 0.013 / 0.011 against its 431-image partition |
 | Unseen suspicious group (294 cells, 127 regions) vs all 348 normal / 260 cancer cells | 32% called cancer-like vs 5% / 92%; mean cancer probability 0.36 vs 0.12 / 0.89; same order in all five fold models |
 
 ## Repository structure
@@ -56,6 +58,7 @@ This repository contains every script used in the study:
 │   ├── make_figures.py        # Figs 6-8 and Supplementary Fig. S2
 │   ├── make_revision_figures.py   # Fig. 10 and Supplementary Figs S1 and S4
 │   ├── fig_attribution.py     # Fig. 9 (occlusion and Grad-CAM++ maps)
+│   ├── v10/                   # manuscript v10 verification scripts (see below)
 │   ├── final_model_analysis.py
 │   ├── fix_texture_fig.py     # re-letters the panels of the texture figure
 │   └── afisnet_architecture.tex   # Fig. 3, architecture diagram (TikZ)
@@ -77,7 +80,7 @@ The five stage scripts are standalone. `kfold_classification.py`, `screening_ana
   - LeCam regularisation (λ = 0.05);
   - style mixing (0.9) and path-length regularisation (weight 2);
   - a generator EMA with a 20-kimg half-life.
-- **Training.** Adam (β₁ = 0, β₂ = 0.99, learning rate 2 × 10⁻³), batch 16, 3,000 kimg, at 224 × 224 resolution. Training images are random 224 crops of the 256 × 256 single-cell images, with flips and 90° rotations.
+- **Training.** Adam (β₁ = 0, β₂ = 0.99, learning rate 2 × 10⁻³), batch 16, up to 3,000 kimg (early stop after 600 kimg without a KID improvement of 5 × 10⁻⁴), at 224 × 224 resolution. Training images are random 224 crops of the 256 × 256 single-cell images, with flips and 90° rotations.
 - **NTP loss.** Five distribution-level statistics, each matched to class-wise EMA targets (decay 0.99) with a scale-invariant relative MSE (ε = 10⁻⁶):
 
   | Statistic | Weight |
@@ -88,30 +91,32 @@ The five stage scripts are standalone. `kfold_classification.py`, `screening_ana
   | One-sided total-variation hinge | 0.1 |
   | Soft-masked fluorescence photometry (κ = 0.5, τ = 0.08) | 0.5 |
 
-  The overall NTP weight is 0 for 20 epochs, then ramps linearly to 1 over the next 30.
-- **Checkpoint selection.** A fixed 15% of each class of the training folder (37 normal and 28 cancer images in the paper) is held out from GAN training, so the generator is fitted on 366 images. Checkpoints are selected by KID on that hold-out; the generator never sees validation or test images.
+  The overall NTP weight is 0 for 20 epochs, then ramps linearly to 1 over the next 30 (one epoch = 22 iterations of 16 images from the fitting subset, so ≈ 7.0 and ≈ 10.6 kimg). The loss and its EMA targets are updated every 4th iteration on sub-batches of 8 images. The targets are computed only from real images of the training mini-batches (the fitting subset); the checkpoint-selection images never enter them. The fluorescence term uses grey-scale statistics and does not constrain the ratios between colour channels.
+- **Data roles (`_deterministic_holdout`, `get_dataloaders`).** The training folder (the 431-image generator partition in the paper: 247 normal, 184 cancer) is split by a SHA-256 hash of the file name: `max(2, round(0.15 n))` images per class (37 normal, 28 cancer) form the checkpoint-selection subset and the remaining 366 (210 normal, 156 cancer) the fitting subset. Only the fitting subset feeds the discriminator and generator updates, R1, ADA and the NTP targets.
+- **Checkpoint selection.** Every 25 kimg, KID is computed per class between 256 generated images and the checkpoint-selection images of that class (100 subsets of 24); the checkpoint with the lowest mean KID is saved as `generator_best.pth` and used for generation. FID is logged but not used. The 177 validation and test images of the paper are never seen by the generator.
 - **Baseline.** `--no-ntp` gives the StyleGAN2-ADA baseline used in the paper.
-- **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used 1,500 images per class (`--per-class 1500`); the default is 1,000.
+- **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used two generations: 1,000 images per class (the default), from which the 215 QC-selected images were ranked, and a separate generation of 1,500 per class (the 3,000-image complete pool used for all other arms).
 
 ### 2. Quality control: `gan_quality_selection.py` and `experiments/afis_analysis.py`
 
-**Ranked selection (QC-selected)** is done by `gan_quality_selection.py`. Every generated image is scored against the real training images of its class. The weights are:
+**Ranked selection (QC-selected)** is done by `gan_quality_selection.py`. Every generated image is compared with the real training images of its class (DINOv2, CLIP, LPIPS) and scored as executed by `compute_final_scores()`:
 
-| Term | Weight |
-|---|---|
-| DINOv2 class margin | 0.25 |
-| DINOv2 top-10 similarity | 0.20 |
-| CLIP top-10 similarity | 0.12 |
-| LPIPS to nearest real image | 0.08 |
-| Nearest-neighbour distance | 0.07 |
-| Local real-image density | 0.03 |
+S = [ w_m·m̃ + w_d·d̃ + w_c·c̃ + w_l·(1 − l̃) + w_ρ·(1 − ρ̃) ] · (1 − 0.25·o)
 
-Weights of disabled terms are redistributed proportionally, and the score is multiplied by 1 − 0.25 × the isolation-forest outlier score. The script rejects:
-- class-ambiguous images (margin ≤ 0);
-- near-copies of real images (DINOv2 cosine ≥ 0.995);
-- near-duplicates of already kept images (cosine > 0.98).
+| Symbol | Term | Nominal weight | Weight used |
+|---|---|---|---|
+| m | DINOv2 class margin (mean top-10 similarity to own class − to other class) | 0.25 | 0.3333 |
+| d | DINOv2 mean top-10 similarity to own class | 0.20 | 0.2667 |
+| c | CLIP mean top-10 similarity to own class | 0.12 | 0.1600 |
+| l | LPIPS distance to the DINOv2-nearest real image (inverted) | 0.08 | 0.1067 |
+| ρ | mean DINOv2 distance √(2 − 2cos) to the 10 nearest real images (inverted, i.e. local density) | 0.03 | 0.0400 |
+| o | isolation-forest outlier flag ∈ {0, 1}, fitted on the generated images of the class | – | ×(1 − 0.25 o) |
 
-It then keeps the top 40%, capped at half the number of real training images. In the paper this gave 215 images.
+A tilde is min–max normalisation over the generated images of the class. The weights of the disabled terms (discriminator, IQA) are redistributed by `redistribute_weights()` (factor 1/0.75), and the sum is not renormalised; neither affects the ranking. Images are sorted by decreasing S.
+
+> **Known issue, kept as run.** A nearest-neighbour-distance term (nominal weight 0.07) is defined, but the weight key `nn_dist` looks for the column `n_nn_dist` while the normalised column is `n_nn`, so the term never enters the score. The code is left unchanged because this is how every reported selection was produced; `paper_scripts/v10/verify_qc_score.py` reproduces the saved per-image scores only without this term (max. error 6 × 10⁻⁷).
+
+The script then rejects class-ambiguous images (margin ≤ 0) and near-copies (max DINOv2 cosine ≥ 0.995 to a real image of the class), removes near-duplicates of already kept images (cosine > 0.98) in rank order, and keeps the highest-ranked images up to min(⌊0.4 N_gen⌋, ⌊0.5 N_real⌋) per class. With 1,000 generated images per class the cap of half the real images is binding, which gave the paper's 215 images (123 normal, 92 cancer). The QC-at-scale arm (`afis_analysis.qc_all_ntp`) re-runs the same script on the 3,000-image pool with `TOP_PERCENT = 0.8` and no cap (2,124 images).
 
 **Hygiene filter (QC-clean)** is `afis_analysis.qc_clean_ntp`. It applies no ranking. An image is removed only if it fails a check that real cells of its class almost never fail:
 - a technical defect;
@@ -195,6 +200,17 @@ This script applies a trained k-fold ensemble to a held-out cohort. It reports p
 - Mahalanobis novelty.
 
 It also gives group and ROI summaries. The screening numbers in the paper come from `afis_revision.screening_full`.
+
+## Manuscript version 10: verification scripts
+
+`paper_scripts/v10/` checks the manuscript against the code and the saved outputs; none of these scripts trains or generates anything.
+
+| Script | Checks |
+|---|---|
+| `verify_qc_score.py` | recovers the QC ranking equation from a saved `scores.csv` and the selection rule (2,124-image run) |
+| `check_qc_selected_provenance.py` | the 215 QC-selected images are not part of the 3,000-image pool (separate generation) |
+| `audit_screening.py` | held-out scoring, one fold model per suspicious-group region, per-model thresholds, and all screening numbers (17 checks) |
+| `make_figS1.py` | Supplementary Fig. S1 with the generator-partition label |
 
 ## How to run
 
