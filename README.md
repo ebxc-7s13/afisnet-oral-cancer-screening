@@ -1,8 +1,8 @@
-# Texture-Preserving Generative Augmentation for Robust Representation Learning in Limited-Data Autofluorescence Cytology
+# Texture-Preserving Generative Augmentation for Representation Learning in Limited-Data Autofluorescence Cytology
 
 Code for the paper:
 
-> **Texture-Preserving Generative Augmentation for Robust Representation Learning in Limited-Data Autofluorescence Cytology**
+> **Texture-Preserving Generative Augmentation for Representation Learning in Limited-Data Autofluorescence Cytology**
 > Siluveru Raja Viveka Vardhan, Sk Sher Md, Mousumi Pal, Ananya Barui
 > Centre for Healthcare Science and Technology, Indian Institute of Engineering Science and Technology Shibpur; Guru Nanak Institute of Dental Sciences and Research
 > Submitted to *Biomedical Signal Processing and Control*.
@@ -16,7 +16,7 @@ This repository contains every script used in the study:
 - **region-grouped five-fold cross-validation**, repeated over three seeds;
 - the controlled experiments on synthetic-data quantity and curation;
 - quantitative attribution analysis;
-- **leakage-free screening** of an unseen cohort of tobacco smokers.
+- **screening of an unseen suspicious group** (tobacco smokers without a diagnosed lesion), scored by models that never saw it.
 
 ## Main results reported in the paper
 
@@ -27,7 +27,8 @@ This repository contains every script used in the study:
 | AFiS-Net-XA, real only → + all 3,000 generated images | AUC 0.954 → 0.973 (Holm-adjusted p = 0.001) |
 | QC-selected (215) vs random (215) synthetic images | no difference; ranking by QC score did not help |
 | AFiS-Net + QC-clean set (2,764 images, hygiene filter, single seed) | AUC 0.969, macro F1 0.934 |
-| Unseen smokers, mean cancer probability (normal / smokers / cancer) | 0.05 / 0.41 / 0.95; the fold models disagree on most smoker cells |
+| Generator vs the 177 real images not used to fit it | KID 0.016 (normal) / 0.012 (cancer), similar to 0.013 / 0.011 against its training images |
+| Unseen suspicious group (294 cells, 127 regions) vs all 348 normal / 260 cancer cells | 32% called cancer-like vs 5% / 92%; mean cancer probability 0.36 vs 0.12 / 0.89; same order in all five fold models |
 
 ## Repository structure
 
@@ -41,13 +42,20 @@ This repository contains every script used in the study:
 ├── experiments/
 │   ├── afis_core.py           # experiments of the paper: job queue, folds, synthetic sources, AFiS-Net variants,
 │   │                          #   pre-declared model-selection rule
-│   └── afis_analysis.py       # QC hygiene filter, matched-n generator metrics, texture analysis, attribution
-│                              #   metrics, leakage-free screening (novelty, JPEG control), paired statistics
+│   ├── afis_analysis.py       # QC hygiene filter, matched-n generator metrics, texture analysis, attribution
+│   │                          #   metrics, paired statistics
+│   └── afis_revision.py       # screening of the suspicious group, generator vs the 177 unseen images,
+│                              #   hold-out and crop facts, region-clustered bootstrap
+├── notebooks/
+│   └── AFiSNet_Revision11_screening_and_checks.ipynb   # Kaggle notebook that ran afis_revision.py
 ├── paper_scripts/
 │   ├── make_tables.py         # builds every results table of the paper from the result files
 │   ├── integrity_check.py     # recomputes the numbers quoted in the paper and checks them against the manuscript
+│   ├── integrity_check_screening.py   # same for the screening and the other session-11 numbers
 │   ├── fig_final.py           # Figs 6 and 7 (ROC/confusion; quantity vs curation)
-│   ├── make_figures.py        # remaining result figures
+│   ├── make_figures.py        # Figs 6-8 and Supplementary Fig. S2
+│   ├── make_revision_figures.py   # Fig. 10 and Supplementary Figs S1 and S4
+│   ├── fig_attribution.py     # Fig. 9 (occlusion and Grad-CAM++ maps)
 │   ├── final_model_analysis.py
 │   ├── fix_texture_fig.py     # re-letters the panels of the texture figure
 │   └── afisnet_architecture.tex   # Fig. 3, architecture diagram (TikZ)
@@ -81,7 +89,7 @@ The five stage scripts are standalone. `kfold_classification.py`, `screening_ana
   | Soft-masked fluorescence photometry (κ = 0.5, τ = 0.08) | 0.5 |
 
   The overall NTP weight is 0 for 20 epochs, then ramps linearly to 1 over the next 30.
-- **Checkpoint selection.** A fixed 15% of each class of the training folder is held out from GAN training. Checkpoints are selected by KID on that hold-out, so the generator never sees validation or test images.
+- **Checkpoint selection.** A fixed 15% of each class of the training folder (37 normal and 28 cancer images in the paper) is held out from GAN training, so the generator is fitted on 366 images. Checkpoints are selected by KID on that hold-out; the generator never sees validation or test images.
 - **Baseline.** `--no-ntp` gives the StyleGAN2-ADA baseline used in the paper.
 - **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used 1,500 images per class (`--per-class 1500`); the default is 1,000.
 
@@ -166,8 +174,18 @@ The final AFiS-Net is **`AFiSNet_ConcatAvg`**: average-pooled FPN levels of Conv
 - generator metrics at matched sample size (FID, KID, precision/recall/density/coverage);
 - Fourier and LBP texture analysis;
 - occlusion and Grad-CAM++ evaluation (share of attribution inside the cell, pointing game, deletion/insertion);
-- leakage-free screening: comparison images are scored out-of-fold and unseen images by the mean of the five fold models, with between-model s.d., diagonal-Mahalanobis novelty and a JPEG file-format control;
 - paired statistics: Wilcoxon with Holm adjustment, DeLong, Jonckheere–Terpstra, Kruskal–Wallis and Mann–Whitney.
+
+It also holds the earlier 18-image screening (`screening_v8`), which the paper no longer uses.
+
+`afis_revision.py` contains the analyses added for the submitted version, run by the notebook in `notebooks/`:
+- **screening of the suspicious group** (`screening_full`): all 608 development images are scored by the fold model that held them out, and each imaging region of the suspicious group is assigned to one of the five final AFiS-Net models, so every image is scored by exactly one model that never saw it. Group comparison with image- and region-level Jonckheere–Terpstra, Kruskal–Wallis and Holm-adjusted Mann–Whitney tests, Cliff's δ and region-bootstrap confidence intervals; sensitivity analyses with the mean of the five models, each fold model separately, and normal/cancer images re-encoded as JPEG like the suspicious-group files; diagonal-Mahalanobis novelty. Exact duplicates, near-duplicates and copies of development images are removed from the suspicious group automatically;
+- generator metrics against the 177 real images not used to fit the generator (`gan_unseen`);
+- generator hold-out counts and foreground-crop statistics (`facts`);
+- region-clustered bootstrap of pooled out-of-fold AUC (`cluster_bootstrap`; not reported in the paper);
+- an optional downstream comparison of the NTP and baseline generators (`ntp_jobs`; not run for the paper).
+
+Internally the suspicious group keeps the folder and key name `smoke`.
 
 ### 6. Stand-alone screening: `screening_analysis.py`
 
@@ -176,7 +194,7 @@ This script applies a trained k-fold ensemble to a held-out cohort. It reports p
 - entropy and epistemic uncertainty;
 - Mahalanobis novelty.
 
-It also gives group and ROI summaries. The screening numbers in the paper come from `afis_analysis.screening_v8`.
+It also gives group and ROI summaries. The screening numbers in the paper come from `afis_revision.screening_full`.
 
 ## How to run
 
@@ -191,11 +209,16 @@ python kfold_classification.py                           # region-grouped cross-
 python screening_analysis.py --checkpoint results/kfold/AFiSNet/Raw_SelectedSynthetic --data-root data/screening
 ```
 
-To build the paper's tables and check the manuscript numbers from the experiment results:
+The screening of the suspicious group and the other session-11 analyses run in `notebooks/AFiSNet_Revision11_screening_and_checks.ipynb` (Kaggle, 2×T4). It restores the earlier results, reuses the seed-42 checkpoints of the final AFiS-Net, and writes `afis_results/revision11/`.
+
+To build the paper's tables and figures and check the manuscript numbers from the experiment results:
 
 ```bash
 python paper_scripts/make_tables.py RES7 RES9 record_based_tests.csv out/
+python paper_scripts/make_revision_figures.py RES/revision11 out/
+python paper_scripts/fig_attribution.py RES out/fig_explainability
 python paper_scripts/integrity_check.py MANUSCRIPT_DIR RES7 RES9 record_based_tests.csv
+python paper_scripts/integrity_check_screening.py MANUSCRIPT_DIR SUPPLEMENT_DIR RES/revision11
 ```
 
 Every script accepts `--help`. Dataset locations can be set with CLI flags or the `AFIS_*` environment variables documented in `classification.py`.
@@ -209,12 +232,12 @@ data/
 ├── train/{normal,cancer}/
 ├── val/{normal,cancer}/
 ├── test/{normal,cancer}/
-└── screening/{normal,smoke,cancer}/      # held out from all training
+└── screening/smoke/                      # suspicious group (tobacco smokers), held out from all training
 ```
 
 Filenames follow `roi_<id>_<YYYYMMDD>_<HHMMSS>*.png`. The ROI id and acquisition date define the region groups.
 
-**Only the code is distributed here.** Patient privacy and institutional ethics requirements prevent publishing the confocal autofluorescence images; they are available from the corresponding author on reasonable request. The per-run metrics, paired tests, per-image QC decisions, attribution metrics and screening results are provided as supplementary material with the paper.
+**Only the code is distributed here.** Patient privacy and institutional ethics requirements prevent publishing the confocal autofluorescence images; they are available from the corresponding author on reasonable request. The per-run metrics, paired tests, per-image QC decisions, attribution metrics, generator metrics and per-image screening results are provided as CSV files in the supplementary material of the paper.
 
 ## Hardware
 

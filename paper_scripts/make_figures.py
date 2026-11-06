@@ -1,4 +1,5 @@
-"""Publication figures for the revised AFiS-Net manuscript, rebuilt from the Kaggle result files."""
+"""Result figures of the AFiS-Net manuscript (Figs 6-8, Supplementary Fig. S2), rebuilt from the Kaggle result files.
+Usage: python make_figures.py RESULTS_DIR OUT_DIR"""
 import sys, os, glob, json
 from pathlib import Path
 import numpy as np, pandas as pd
@@ -33,7 +34,7 @@ def preds(f, m, e, s):
     return pd.concat(out, ignore_index=True)
 
 
-# ---- Fig. 5 (replaces held-out ROC/confusion): pooled out-of-fold CV, AFiS-Net, 3 seeds
+# ---- Fig. 6: pooled out-of-fold ROC and confusion matrices, AFiS-Net, 3 seeds
 fig, axes = plt.subplots(1, 3, figsize=(7.4, 2.6), gridspec_kw={"width_ratios": [1.2, 1, 1], "wspace": 0.45})
 grid = np.linspace(0, 1, 201)
 for exp, col, lab in (("Raw", GREY, "Real only"), ("Raw_SelectedSynthetic", BLUE, "Real + 215 QC-selected")):
@@ -61,7 +62,7 @@ for ax, exp, lab in ((axes[1], "Raw", "B  Real only"), (axes[2], "Raw_SelectedSy
         sp.set_visible(False)
 save(fig, "fig_cv_roc_confusion")
 
-# ---- Fig. 6: quantity vs curation (seed 42, same five folds)
+# ---- Fig. 7: quantity vs curation (seed 42, same five folds)
 pts = [(0, arm("E1_kfold", "AFiSNet", "Raw", [42])), (215, arm("E3_synthetic_source", "AFiSNet", "Raw_RandomUnfiltered", [42]))] + \
       [(n, arm("E3_dose", "AFiSNet", f"Raw_Random{n:04d}")) for n in (500, 1000, 2000)] + \
       [(3000, arm("E3_synthetic_source", "AFiSNet", "Raw_AllUnfiltered", [42]))]
@@ -82,7 +83,7 @@ for ax, met, lab, tag in zip(axes, ("auc_all", "f1_05_all"), ("AUC", "Macro F1 (
 axes[1].legend(frameon=False, loc="lower right")
 save(fig, "fig_quantity_vs_curation")
 
-# ---- Fig. 7: data scaling (3 seeds)
+# ---- Fig. 8: data scaling (3 seeds)
 fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.5))
 for ax, met, lab, tag in zip(axes, ("auc_all", "f1_05_all"), ("AUC", "Macro F1 (threshold 0.5)"), ("A", "B")):
     for base, col, l, dx in (("Raw", GREY, "Real only", -1.2), ("Raw_SelectedSynthetic", BLUE, "Real + 215 QC-selected", 1.2)):
@@ -96,58 +97,9 @@ for ax, met, lab, tag in zip(axes, ("auc_all", "f1_05_all"), ("AUC", "Macro F1 (
 axes[0].legend(frameon=False, loc="lower right")
 save(fig, "fig_data_scaling")
 
-# ---- Fig. 9: leakage-free screening (probability, novelty) + UMAP of the new runs
-FB = Path(sys.argv[3]) if len(sys.argv) > 3 else None
-p = pd.read_csv(R / "screening" / "leakfree" / "per_image_leakfree.csv")
-st = json.load(open(R / "screening" / "leakfree" / "stats_leakfree.json"))
-nov = pd.read_csv(FB / "screening_novelty_leakfree.csv")
-ref = pd.concat([pd.read_csv(f) for f in sorted(FB.glob("afis_results/runs/E1_kfold/AFiSNet/Raw_SelectedSynthetic/seed_42/fold_*/FeatureBank/test/filenames.csv"))])
-um = np.load(FB / "umap_fold0.npz")
-names = {"normal": "Normal", "smoke": "Smokers", "cancer": "Cancer"}
-cols = {"normal": GREY, "smoke": ORANGE, "cancer": "#c53030"}
-fig, axes = plt.subplots(1, 3, figsize=(7.6, 2.8), gridspec_kw={"width_ratios": [1, 1.15, 1.05], "wspace": 0.45})
-rng = np.random.default_rng(1)
-ax = axes[0]
-for i, g in enumerate(("normal", "smoke", "cancer")):
-    v = p[p.group == g].p_cancer.values
-    bp = ax.boxplot([v], positions=[i], widths=0.5, showfliers=False, patch_artist=True)
-    for b in bp["boxes"]:
-        b.set(facecolor=cols[g], alpha=0.18, edgecolor=cols[g])
-    for k in ("medians", "whiskers", "caps"):
-        for e in bp[k]:
-            e.set(color=cols[g])
-    ax.scatter(i + rng.uniform(-0.14, 0.14, len(v)), v, s=10, color=cols[g], alpha=0.85, lw=0, zorder=3)
-ax.axhline(float(p.threshold.median()), ls="--", c="k", lw=0.7)
-ax.set_xticks([0, 1, 2]); ax.set_xticklabels([names[g] + f"\n(n = {(p.group == g).sum()})" for g in ("normal", "smoke", "cancer")], fontsize=7)
-ax.set_ylabel("Predicted cancer probability"); ax.set_ylim(-0.03, 1.05)
-ax.set_title("A  Cancer probability", loc="left")
-ax = axes[1]
-groups = [("ref", "CV test\n(608)", ref.mahalanobis_ood_score.values, "#a0aec0")] + \
-         [(g, names[g] + f"\n({(nov.group == g).sum()})", nov[nov.group == g].ood.values, cols[g]) for g in ("normal", "smoke", "cancer")]
-for i, (g, lab_, v, col) in enumerate(groups):
-    lv = np.log10(v)
-    bp = ax.boxplot([lv], positions=[i], widths=0.55, showfliers=False, patch_artist=True)
-    for b in bp["boxes"]:
-        b.set(facecolor=col, alpha=0.2, edgecolor=col)
-    for k in ("medians", "whiskers", "caps"):
-        for e in bp[k]:
-            e.set(color=col)
-    if g != "ref":
-        ax.scatter(i + rng.uniform(-0.14, 0.14, len(v)), lv, s=10, color=col, alpha=0.85, lw=0, zorder=3)
-q95 = np.log10(np.quantile(ref.mahalanobis_ood_score.values, 0.95))
-ax.axhline(q95, ls=":", c="k", lw=0.7)
-ax.set_xticks(range(len(groups))); ax.set_xticklabels([g[1] for g in groups], fontsize=6.5)
-ax.set_ylabel("Novelty, log$_{10}$ Mahalanobis distance"); ax.set_title("B  Out-of-distribution novelty", loc="left")
-ax = axes[2]
-for c, col, lab_ in ((0, GREY, "Normal"), (1, "#c53030", "Cancer")):
-    ax.scatter(um["ztr"][um["ltr"] == c, 0], um["ztr"][um["ltr"] == c, 1], s=4, color=col, alpha=0.15, lw=0, label=f"{lab_}, training")
-    ax.scatter(um["zte"][um["lte"] == c, 0], um["zte"][um["lte"] == c, 1], s=11, color=col, alpha=0.9, lw=0.3, edgecolor="white", label=f"{lab_}, held-out")
-ax.set_xticks([]); ax.set_yticks([]); ax.set_xlabel("UMAP 1"); ax.set_ylabel("UMAP 2")
-ax.legend(frameon=False, fontsize=5.8, loc="upper right", markerscale=1.2, handletextpad=0.2)
-ax.set_title("C  Learned embedding", loc="left")
-save(fig, "fig_screening")
+# ---- Fig. 10 (screening of the suspicious group) and Supplementary Figs S1, S4: see make_revision_figures.py
 
-# ---- Supplementary: FID at matched sample size
+# ---- Supplementary Fig. S2: FID at matched sample size
 g = pd.read_csv(R / "gan_metrics_v2" / "gan_metrics_matched_n.csv")
 fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.4))
 lab = {"NTP QC-selected (paper)": "QC-selected\n(215)", "NTP all (unfiltered)": "All\n(3,000)", "NTP QC top-80% of all": "QC top-80%\n(2,124)"}

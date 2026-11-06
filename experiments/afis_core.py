@@ -581,6 +581,25 @@ def get_synthetic_for_job(job, C, K, real, class_to_idx, cfg, split, paths):
             pick = rng.choice(len(cand), size=min(n_c, len(cand)), replace=False)
             out += [(cand[i], c) for i in sorted(pick)]
         return out, {"random_subset_seed": RANDOM_SUBSET_SEED + 2, "matched_to": "qc_clean"}
+    if syn in ("baseline_all_unfiltered", "ntp_match_baseline"):   # session 11: does the NTP loss matter downstream?
+        broot = paths.get("synthetic_all_baseline")
+        if not broot or not os.path.isdir(broot):
+            g = RESULTS / "baseline_qc" / "generated" / "final_generated"
+            broot = str(g) if g.is_dir() else None
+        if not broot:
+            raise FileNotFoundError("No baseline-generator images (synthetic_all_baseline/ or baseline_qc/generated).")
+        base = _syn_list(C, real, class_to_idx, broot, cfg.use_hash_dedup)
+        if syn == "baseline_all_unfiltered":
+            return base, {"source": broot}
+        pool = _syn_list(C, real, class_to_idx, paths["synthetic_all_ntp"], cfg.use_hash_dedup)
+        rng = np.random.default_rng(RANDOM_SUBSET_SEED + 3)
+        out = []
+        for c in sorted(set(y for _, y in base)):
+            n_c = sum(1 for _, y in base if y == c)
+            cand = sorted(p for p, y in pool if y == c)
+            pick = rng.choice(len(cand), size=min(n_c, len(cand)), replace=False)
+            out += [(cand[i], c) for i in sorted(pick)]
+        return out, {"random_subset_seed": RANDOM_SUBSET_SEED + 3, "matched_to": "baseline_all"}
     if syn == "baseline_selected":
         root = paths.get("synthetic_selected_baseline") or str(RESULTS / "baseline_qc" / "selected")
         if not os.path.isdir(root):
@@ -711,7 +730,8 @@ def worker_main(jobs_file, deadline, worker_name):
             return float(np.median(by_key[key])), key
         if SMOKE:
             return default_est, key
-        if job["syn"] in ("all_unfiltered", "qc_all", "random_match_qcall", "qc_clean", "random_match_qcclean"):
+        if job["syn"] in ("all_unfiltered", "qc_all", "random_match_qcall", "qc_clean", "random_match_qcclean",
+                          "baseline_all_unfiltered", "ntp_match_baseline"):
             return 65 * 60.0, key                       # ~3,000 synthetic images: ~1 h per fold on a T4
         if job["syn"] == "random_n":
             return (10 + 55 * int(job.get("nsyn", 0)) / 3000.0) * 60.0, key
