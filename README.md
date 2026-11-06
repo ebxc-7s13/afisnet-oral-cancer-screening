@@ -18,7 +18,7 @@ This repository contains every script used in the study:
 - quantitative attribution analysis;
 - **screening of an unseen suspicious group** (an exposure-defined group of active cigarette smokers without a diagnosed oral lesion), scored by models that never saw it.
 
-The cancer class comprises histopathologically confirmed oral epithelial dysplasia or oral squamous cell carcinoma; the classifier output is the probability of this binary training class, not a validated probability of carcinoma.
+The cancer class comprises histopathologically confirmed oral squamous cell carcinoma (OSCC); the classifier output is the cell-level probability of this binary training class, not a clinically validated diagnostic probability.
 
 ## Main results reported in the paper
 
@@ -95,7 +95,7 @@ The five stage scripts are standalone. `kfold_classification.py`, `screening_ana
 - **Data roles (`_deterministic_holdout`, `get_dataloaders`).** The training folder (the 431-image generator partition in the paper: 247 normal, 184 cancer) is split by a SHA-256 hash of the file name: `max(2, round(0.15 n))` images per class (37 normal, 28 cancer) form the checkpoint-selection subset and the remaining 366 (210 normal, 156 cancer) the fitting subset. Only the fitting subset feeds the discriminator and generator updates, R1, ADA and the NTP targets.
 - **Checkpoint selection.** Every 25 kimg, KID is computed per class between 256 generated images and the checkpoint-selection images of that class (100 subsets of 24); the checkpoint with the lowest mean KID is saved as `generator_best.pth` and used for generation. FID is logged but not used. The 177 validation and test images of the paper are never seen by the generator.
 - **Baseline.** `--no-ntp` gives the StyleGAN2-ADA baseline used in the paper.
-- **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used two generations: 1,000 images per class (the default), from which the 215 QC-selected images were ranked, and a separate generation of 1,500 per class (the 3,000-image complete pool used for all other arms).
+- **Generation.** The EMA generator samples with truncation ψ = 0.9. The paper used two sets sampled from the same selected checkpoint (`generator_best.pth`): 1,000 images per class (the default), from which the 215 QC-selected images were ranked, and a separately sampled set of 1,500 per class (the 3,000-image complete pool used for all other arms).
 
 ### 2. Quality control: `gan_quality_selection.py` and `experiments/afis_analysis.py`
 
@@ -185,7 +185,7 @@ It also holds the earlier 18-image screening (`screening_v8`), which the paper n
 
 `afis_revision.py` contains the analyses added for the submitted version, run by the notebook in `notebooks/`:
 - **screening of the suspicious group** (`screening_full`): all 608 development images are scored by the fold model that held them out, and each imaging region of the suspicious group is assigned to one of the five final AFiS-Net models, so every image is scored by exactly one model that never saw it. Group comparison with image- and region-level Jonckheere–Terpstra, Kruskal–Wallis and Holm-adjusted Mann–Whitney tests, Cliff's δ and region-bootstrap confidence intervals; sensitivity analyses with the mean of the five models, each fold model separately, and normal/cancer images re-encoded as JPEG like the suspicious-group files; diagonal-Mahalanobis novelty. Exact duplicates, near-duplicates and copies of development images are removed from the suspicious group automatically;
-- generator metrics against the 177 real images not used to fit the generator (`gan_unseen`);
+- generator metrics against the 177 real images never used by the generator (`gan_unseen`);
 - generator hold-out counts and foreground-crop statistics (`facts`);
 - region-clustered bootstrap of pooled out-of-fold AUC (`cluster_bootstrap`; not reported in the paper);
 - an optional downstream comparison of the NTP and baseline generators (`ntp_jobs`; not run for the paper).
@@ -208,9 +208,11 @@ It also gives group and ROI summaries. The screening numbers in the paper come f
 | Script | Checks |
 |---|---|
 | `verify_qc_score.py` | recovers the QC ranking equation from a saved `scores.csv` and the selection rule (2,124-image run) |
-| `check_qc_selected_provenance.py` | the 215 QC-selected images are not part of the 3,000-image pool (separate generation) |
+| `check_qc_selected_provenance.py` | the 215 QC-selected images are not part of the 3,000-image pool (separately sampled set) |
 | `audit_screening.py` | held-out scoring, one fold model per suspicious-group region, per-model thresholds, and all screening numbers (17 checks) |
 | `make_figS1.py` | Supplementary Fig. S1 with the generator-partition label |
+| `integrity_check_v10.py`, `integrity_check_screening_v10.py` | v9 integrity checks extended with the v10 statements (92 and 76 checks) |
+| `audit_v10_extra.py` | Table 1 subsets, NTP/KID settings read from `gan_training.py`, memorisation, QC counts, abstract length |
 
 ## How to run
 
@@ -257,7 +259,7 @@ Filenames follow `roi_<id>_<YYYYMMDD>_<HHMMSS>*.png`. The ROI id and acquisition
 
 ## Hardware
 
-In the paper, the generator was trained on one NVIDIA RTX 6000. The classifier experiments ran on NVIDIA T4 GPUs with mixed precision.
+In the paper, the generator was trained on one NVIDIA RTX 4000 Ada (20 GB). The classifier experiments ran on NVIDIA T4 GPUs with mixed precision.
 
 ## Naming
 
