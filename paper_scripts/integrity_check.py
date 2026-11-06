@@ -1,7 +1,8 @@
-"""Integrity check for the manuscript. (1) Regenerates every table from the result files and confirms the inlined
+"""Integrity check for the manuscript (v9). (1) Regenerates every table from the result files and confirms the inlined
 tables in main.tex are identical. (2) Recomputes the key numbers quoted in the text and confirms each appears.
 (3) Confirms banned strings are absent. Prints a Markdown report; exit code 1 on any problem.
-Usage: python integrity_check.py FINAL_DIR RES7 RES9 RECORD_TESTS"""
+The screening numbers (suspicious group, session 11) are checked by integrity_check_screening.py.
+Usage: python integrity_check.py FINAL_DIR RES7 RES9 RECORD_TESTS   (FINAL_DIR holds main.tex and supp/data_tables)"""
 import json
 import pathlib
 import subprocess
@@ -76,35 +77,9 @@ r = qc["reasons"]
 check("QC-clean reasons", f"removing {r['technical defect']} technical defects, {r['unrealistic (unlike any real cell)']} unrealistic images, and {r['class-ambiguous']} extremely class-ambiguous images")
 t = {(x["cls"], x["set"]): x for x in N["texture"]}
 mae = lambda c, k: f"{t[(c, k)]['spectral_MAE_log10']:.3f}"
-check("Spectral MAE", f"Spectral MAE was {mae('normal', 'QC-selected')} and {mae('cancer', 'QC-selected')} (normal, cancer) for the QC-selected images, {mae('normal', 'All generated')} and {mae('cancer', 'All generated')} for the complete pool, and {mae('normal', 'QC-clean (hygiene)')} and {mae('cancer', 'QC-clean (hygiene)')} for the QC-clean set")
+check("Spectral MAE", f"The spectral MAE (normal, cancer) was {mae('normal', 'QC-selected')} and {mae('cancer', 'QC-selected')} for the QC-selected images, {mae('normal', 'All generated')} and {mae('cancer', 'All generated')} for the complete pool, and {mae('normal', 'QC-clean (hygiene)')} and {mae('cancer', 'QC-clean (hygiene)')} for the QC-clean set")
 cor = [x["LBP_correlation"] for x in N["texture"]]; it = [x["LBP_intersection"] for x in N["texture"]]
 check("LBP ranges", f"(correlation {min(cor):.3f}--{max(cor):.3f}, intersection {min(it):.3f}--{max(it):.3f})")
-s = N["screen_final"]
-check("Screening means", f"on average {s['normal']:.2f} for normal cells, {s['smoke']:.2f} for the susceptible group, and {s['cancer']:.2f} for cancer cells")
-check("Screening all-3000", "({normal:.2f}, {smoke:.2f}, {cancer:.2f})".format(**N["screen_all"]))
-check("Screening XA", "({normal:.2f}, {smoke:.2f}, {cancer:.2f}; both".format(**N["screen_xa"]))
-st = N["screen_stats"]
-assert st["image"]["jonckheere_normal<smoke<cancer"]["p_one_sided"] < 5.1e-5 and st["region"]["jonckheere_normal<smoke<cancer"]["p_one_sided"] < 5.1e-5
-assert max(v["p_holm"] for v in st["image"]["pairwise_mannwhitney"].values()) < 1e-4
-nv = N["novelty"]
-check("Novelty comparison medians", f"(median {nv['normal']['median']:.1f} and {nv['cancer']['median']:.1f} versus {nv['reference']['median']:.1f}; none above the reference 95th percentile)")
-check("Novelty smokers", f"(median {nv['smoke']['median']:.1f}, interquartile range {nv['smoke']['iqr'][0]:.0f}--{nv['smoke']['iqr'][1]:.0f}; Kruskal--Wallis $p={nv['kruskal_p']:.1e}$".replace("e-04", "\\times10^{-4}"))
-assert max(nv["smoke>normal_p"], nv["smoke>cancer_p"]) * 3 < 1e-3 and nv["smoke"]["p_greater_than_reference"] < 1e-3
-check("Screening KW", f"Kruskal--Wallis $p={st['image']['kruskal_p']:.0e}$".replace("e-08", "\\times10^{-8}"))
-check("Regions", "within " + ", ".join(str(st['region']['n'][g]) for g in ("normal", "smoke")) + f", and {st['region']['n']['cancer']} imaging regions")
-assert round(nv["smoke"]["frac_above_ref_q95"] * 18) == 7
-jc = N["jpeg"]
-check("JPEG control", f"(median ratio {jc['novelty_ratio_median']:.2f}, $p={jc['wilcoxon_p_novelty']:.2f}$")
-# screening disagreement, JPEG effects, unseen AUC
-_s = _pd.read_csv(f"{R9}/screening_final/per_image_screening_v8.csv"); _sm = _s[_s.group == "smoke"]
-check("Smoker disagreement", f"(median between-model s.d.\\ {_sm.p_cancer_sd.median():.2f}; above 0.3 for {(_sm.p_cancer_sd > 0.3).sum()} of 18)")
-check("Threshold median", f"validation-selected threshold (median {_s.threshold.median():.2f})")
-from sklearn.metrics import roc_auc_score as _auc
-_j = _pd.read_csv(f"{R9}/screening_final/jpeg_control_per_image.csv"); _y = (_j.cls == "cancer").astype(int)
-_fl = ((_j.p_cancer_png >= .5) != (_j.p_cancer_jpeg >= .5)); _cn = ((_j.p_cancer_png >= .5) & (_j.p_cancer_jpeg < .5))
-_q = N["novelty"]["reference"]["q95"]
-check("JPEG effects", f"({_fl.sum()} of 608 predictions changed at 0.5, {_cn.sum()} of them from cancer to normal; out-of-fold AUC {_auc(_y, _j.p_cancer_png):.3f} to {_auc(_y, _j.p_cancer_jpeg):.3f})")
-check("JPEG q95 counts", f"{(_j.novelty_jpeg > _q).sum()} versus {(_j.novelty_png > _q).sum()} images above the 95th percentile")
 _v = _pd.read_csv(str(D / "supp/data_tables/paired_tests_v2_auc_f1at05_unseen_delong.csv"))
 _x = _v[(_v.A == "+all 3,000 unfiltered") & (_v.B == "real only")].iloc[0]
 check("Unseen AUC/F1", f"(AUC ${_x.d_auc_unseen:+.3f}$, $p={_x.p_auc_unseen:.2f}$; macro F1 at threshold 0.5 ${_x.d_f1_05_unseen:+.3f}$, $p={_x.p_f1_05_unseen:.2f}$)")
@@ -112,9 +87,9 @@ _x = _v[(_v.A == "+215 QC-selected") & (_v.B == "+215 random")].iloc[0]
 assert _x.d_auc_all < 0
 check("QC vs random recomputed", f"random selection was slightly better, Holm-adjusted $p={_x.p_auc_all_holm:.2f}$")
 for sx in ("608 single-cell images", "125 participants", "3,000 images (1,500 per class)", "real training partition (431 images)",
-           "215 images (123 normal, 92 cancer)", "18 susceptible images", "single seed"):
+           "215 images (123 normal, 92 cancer)", "294 images of the suspicious group", "single seed"):
     check("Count", sx)
-for sx in ("616", "353 normal", "RTX 4000", "this revision", "initial analysis", "Kaggle", "notebook", "seed-42 folds, whereas"):
+for sx in ("616", "353 normal", "RTX 4000", "this revision", "initial analysis", "Kaggle", "notebook", "seed-42 folds, whereas", "susceptible", "18 suspicious"):
     ok = sx not in tex
     bad += not ok
     rows.append(("Must be absent", sx, "OK" if ok else "PRESENT", "whole text"))
